@@ -1,67 +1,58 @@
 """
 Hotel Booking Tools for ReAct Agent
-Simulates a hotel booking system with mock data.
+Loads hotel data from database.md
 """
 
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import random
-
-# ─── Mock Hotel Database ──────────────────────────────────────────────────────
-
-HOTELS_DB = {
-    "HN001": {
-        "id": "HN001", "name": "Metropole Hanoi",
-        "city": "Hanoi", "stars": 5,
-        "price_per_night": 250,
-        "amenities": ["WiFi", "Pool", "Spa", "Restaurant", "Gym"],
-        "address": "15 Ngo Quyen, Hoan Kiem, Hanoi",
-        "rating": 4.8, "available_rooms": 12,
-    },
-    "HN002": {
-        "id": "HN002", "name": "Hanoi La Siesta Hotel",
-        "city": "Hanoi", "stars": 4,
-        "price_per_night": 90,
-        "amenities": ["WiFi", "Rooftop Bar", "Restaurant", "Airport Transfer"],
-        "address": "94 Ma May, Hoan Kiem, Hanoi",
-        "rating": 4.6, "available_rooms": 8,
-    },
-    "HN003": {
-        "id": "HN003", "name": "Hanoi Budget Inn",
-        "city": "Hanoi", "stars": 2,
-        "price_per_night": 25,
-        "amenities": ["WiFi", "Breakfast"],
-        "address": "32 Hang Bong, Hoan Kiem, Hanoi",
-        "rating": 4.0, "available_rooms": 20,
-    },
-    "SGN001": {
-        "id": "SGN001", "name": "Park Hyatt Saigon",
-        "city": "Ho Chi Minh",
-        "stars": 5, "price_per_night": 300,
-        "amenities": ["WiFi", "Pool", "Spa", "Fine Dining", "Concierge"],
-        "address": "2 Lam Son Square, District 1, HCMC",
-        "rating": 4.9, "available_rooms": 5,
-    },
-    "SGN002": {
-        "id": "SGN002", "name": "Caravelle Saigon",
-        "city": "Ho Chi Minh",
-        "stars": 5, "price_per_night": 220,
-        "amenities": ["WiFi", "Pool", "Rooftop Bar", "Spa"],
-        "address": "19 Lam Son Square, District 1, HCMC",
-        "rating": 4.7, "available_rooms": 15,
-    },
-    "DAN001": {
-        "id": "DAN001", "name": "InterContinental Danang",
-        "city": "Da Nang",
-        "stars": 5, "price_per_night": 400,
-        "amenities": ["Private Beach", "Pool", "Spa", "Golf", "Restaurant"],
-        "address": "Son Tra Peninsula, Da Nang",
-        "rating": 4.9, "available_rooms": 3,
-    },
-}
+import os
+import re
 
 BOOKINGS_DB: Dict[str, Dict] = {}
+
+
+def _load_hotels() -> Dict[str, Dict]:
+    """Load hotel data from database.md"""
+    db_path = os.path.join(os.path.dirname(__file__), "database.md")
+    hotels = {}
+
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"Database file not found: {db_path}")
+
+    with open(db_path, 'r') as f:
+        content = f.read()
+
+    # Extract Hotels section
+    hotels_section = re.search(r'## Hotels\n(.*?)\n## ', content, re.DOTALL)
+    if not hotels_section:
+        raise ValueError("Hotels section not found in database.md")
+
+    hotel_blocks = re.findall(r'### (\w+)\n((?:- .+\n?)*)', hotels_section.group(1))
+
+    for hotel_id, details_text in hotel_blocks:
+        hotel = {"id": hotel_id}
+        lines = details_text.strip().split('\n')
+        for line in lines:
+            if line.startswith('- '):
+                key, value = line[2:].split(': ', 1)
+                if key == 'amenities':
+                    hotel[key] = [a.strip() for a in value.split(',')]
+                elif key in ['stars', 'available_rooms']:
+                    hotel[key] = int(value)
+                elif key == 'price_per_night':
+                    hotel[key] = int(value)
+                elif key == 'rating':
+                    hotel[key] = float(value)
+                else:
+                    hotel[key] = value
+        hotels[hotel_id] = hotel
+
+    return hotels
+
+
+HOTELS_DB = _load_hotels()
 
 # ─── Tool Functions ────────────────────────────────────────────────────────────
 

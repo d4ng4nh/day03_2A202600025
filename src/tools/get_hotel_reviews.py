@@ -1,37 +1,74 @@
 from typing import Dict, List
+import os
+import re
 
 
-# Mock dataset used for lab exercises.
-HOTEL_REVIEWS: Dict[str, List[Dict[str, object]]] = {
-	"HCM001": [
-		{"rating": 4.8, "comment": "Very clean room, friendly staff, good breakfast."},
-		{"rating": 4.6, "comment": "Great location near downtown, comfortable bed."},
-		{"rating": 4.2, "comment": "Nice service but the elevator was slow."},
-		{"rating": 4.7, "comment": "Excellent value and quiet at night."},
-	],
-	"HAN002": [
-		{"rating": 3.9, "comment": "Convenient location but room felt small."},
-		{"rating": 4.1, "comment": "Helpful front desk and quick check-in."},
-		{"rating": 3.7, "comment": "Breakfast was average, wifi was unstable."},
-		{"rating": 4.0, "comment": "Good for business trips, clean and safe."},
-	],
-	"DAD003": [
-		{"rating": 4.9, "comment": "Amazing sea view and super clean facilities."},
-		{"rating": 4.7, "comment": "Staff were excellent, spa service was perfect."},
-		{"rating": 4.8, "comment": "Large room, great breakfast, family friendly."},
-	],
-}
+def _load_reviews() -> Dict[str, List[Dict[str, object]]]:
+	"""Load hotel reviews from database.md"""
+	db_path = os.path.join(os.path.dirname(__file__), "database.md")
+	reviews = {}
+
+	if not os.path.exists(db_path):
+		raise FileNotFoundError(f"Database file not found: {db_path}")
+
+	with open(db_path, 'r') as f:
+		content = f.read()
+
+	# Extract Hotel Reviews section
+	reviews_section = re.search(r'## Hotel Reviews\n(.*?)\n## ', content, re.DOTALL)
+	if not reviews_section:
+		raise ValueError("Hotel Reviews section not found in database.md")
+
+	review_blocks = re.findall(r'### (\w+)\n((?:- .+\n?)*)', reviews_section.group(1))
+
+	for hotel_id, details_text in review_blocks:
+		reviews[hotel_id] = []
+		lines = details_text.strip().split('\n')
+		i = 0
+		while i < len(lines):
+			if lines[i].startswith('- rating:'):
+				rating = float(lines[i].split(': ')[1])
+				if i + 1 < len(lines) and lines[i + 1].startswith('- comment:'):
+					comment = lines[i + 1].split(': ', 1)[1]
+					reviews[hotel_id].append({"rating": rating, "comment": comment})
+					i += 2
+				else:
+					i += 1
+			else:
+				i += 1
+
+	return reviews
 
 
-THEME_KEYWORDS: Dict[str, List[str]] = {
-	"cleanliness": ["clean", "dirty", "hygiene"],
-	"staff": ["staff", "service", "front desk"],
-	"location": ["location", "downtown", "near", "central"],
-	"food": ["breakfast", "food", "restaurant"],
-	"comfort": ["bed", "quiet", "room", "noise"],
-	"internet": ["wifi", "internet"],
-	"value": ["value", "price", "cost"],
-}
+def _load_theme_keywords() -> Dict[str, List[str]]:
+	"""Load theme keywords from database.md"""
+	db_path = os.path.join(os.path.dirname(__file__), "database.md")
+
+	if not os.path.exists(db_path):
+		raise FileNotFoundError(f"Database file not found: {db_path}")
+
+	with open(db_path, 'r') as f:
+		content = f.read()
+
+	# Extract Theme Keywords section
+	keywords_section = re.search(r'## Theme Keywords\n(.*?)$', content, re.DOTALL)
+	if not keywords_section:
+		raise ValueError("Theme Keywords section not found in database.md")
+
+	theme_keywords = {}
+	lines = keywords_section.group(1).strip().split('\n')
+	for line in lines:
+		if line.startswith('|') and not line.startswith('| Theme'):
+			parts = [p.strip() for p in line.split('|')[1:-1]]
+			if len(parts) == 2:
+				theme, keywords = parts
+				theme_keywords[theme] = [k.strip() for k in keywords.split(',')]
+
+	return theme_keywords
+
+
+HOTEL_REVIEWS = _load_reviews()
+THEME_KEYWORDS = _load_theme_keywords()
 
 
 def _extract_top_themes(comments: List[str]) -> List[str]:
@@ -79,4 +116,3 @@ def get_hotel_reviews(hotel_id: str) -> str:
 		f"Common themes: {theme_text}. "
 		f"Sample feedback: {sample_text}"
 	)
-

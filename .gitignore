@@ -4,5 +4,6 @@ __pycache__/
 *.log
 .DS_Store
 models/
-
-tests/test_local.py
+.vscode/
+chatbot.py
+./agent/agent.py

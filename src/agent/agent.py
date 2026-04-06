@@ -1,109 +1,143 @@
+import os
 import re
-from typing import List, Dict, Any
-import json
-import logging
 from typing import List, Dict, Any, Optional
 from src.core.llm_provider import LLMProvider
-
-# Simple logger fallback nếu chưa có telemetry module
-try:
-    from src.telemetry.logger import logger
-except ImportError:
-    class _SimpleLogger:
-        def log_event(self, event, data=None):
-            logging.info(f"[{event}] {data}")
-    logger = _SimpleLogger()
-
+from src.telemetry.logger import logger
 
 
 class ReActAgent:
+
     def __init__(self, llm: LLMProvider, tools: List[Dict[str, Any]], max_steps: int = 5):
         self.llm = llm
         self.tools = tools
         self.max_steps = max_steps
         self.history = []
+        self.tool_map = self._build_tool_map(tools)
 
-        # Registry: map tool name -> callable
-        self._tool_registry: Dict[str, Any] = {t["name"]: t["fn"] for t in tools if "fn" in t}
+    def _build_tool_map(self, tools: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        tool_map: Dict[str, Dict[str, Any]] = {}
+        for raw_tool in tools:
+            if not isinstance(raw_tool, dict):
+                continue
+            name = str(raw_tool.get("name", "")).strip()
+            if not name:
+                continue
+            description = str(raw_tool.get("description", "")).strip() or "No description provided."
+            fn = (
+                raw_tool.get("callable")
+                or raw_tool.get("func")
+                or raw_tool.get("function")
+                or raw_tool.get("fn")
+            )
+            tool_map[name] = {"name": name, "description": description, "callable": fn}
+        return tool_map
 
     def get_system_prompt(self) -> str:
-        tool_descriptions = "\n".join(
-            [f"- {t['name']}: {t['description']}\n  Example: {t['name']}({t.get('args_example','')})"
-             for t in self.tools]
-        )
-        return f"""You are a helpful hotel booking assistant. You have access to the following tools:
+        if self.tool_map:
+            tool_descriptions = "\n".join(
+                [f"- {t['name']}: {t['description']}" for t in self.tool_map.values()]
+            )
+        else:
+            tool_descriptions = "- No tools available."
 
+        return f"""
+You are a travel and hotel assistant. You have access to the following tools:
 {tool_descriptions}
 
-Use EXACTLY this format:
-Thought: your line of reasoning.
-Action: tool_name("arg1", "arg2")
+IMPORTANT: You MUST use tools whenever the question involves:
+- Distance or travel between cities → use get_distance
+- Finding or recommending hotels → use search_hotels
+- Hotel details → use get_hotel_details
+- Hotel reviews → use get_hotel_reviews
+- Booking a room → use book_hotel
+- Checking or cancelling a booking → use get_booking_info or cancel_booking
+
+Never answer travel or hotel questions from memory. Always call the relevant tool first.
+
+Use the following format:
+Thought: your line of reasoning and which tool to call.
+Action: tool_name(argument1, argument2)
 Observation: result of the tool call.
 ... (repeat Thought/Action/Observation as needed)
-Final Answer: your final response to the user.
+Final Answer: your final response to the user, based on the tool results.
 
 Rules:
-- Always produce a Thought before an Action.
-- Only call tools that are listed above.
-- When you have enough information, write Final Answer.
+- Always start with a Thought.
+- If NO tool is relevant, respond with ONLY: Final Answer: <your answer>
+- Always end with Final Answer once you have enough information.
 """
+
+    def _extract_final_answer(self, llm_text: str) -> Optional[str]:
+        match = re.search(r"Final\s*Answer\s*:\s*(.*)", llm_text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    def _extract_action(self, llm_text: str) -> Optional[Dict[str, str]]:
+        action_match = re.search(
+            r"Action\s*:\s*([a-zA-Z_][\w]*)\((.*)\)", llm_text, flags=re.IGNORECASE | re.DOTALL
+        )
+        if not action_match:
+            return None
+        return {
+            "tool_name": action_match.group(1).strip(),
+            "args":      action_match.group(2).strip(),
+        }
 
     def run(self, user_input: str) -> str:
         logger.log_event("AGENT_START", {"input": user_input, "model": self.llm.model_name})
 
-        # Seed the conversation with the user message
         self.history.append({"role": "user", "content": user_input})
+        final_answer = None
         steps = 0
-        full_trace = []
 
         while steps < self.max_steps:
-            # 1. Ask the LLM for the next Thought/Action (or Final Answer)
-            result = self.llm.generate(
-                self.history,
-                system_prompt=self.get_system_prompt(),
-            )
-
-            # Append raw assistant output to history
+            result = self.llm.generate(self.history, system_prompt=self.get_system_prompt())
             self.history.append({"role": "assistant", "content": result})
             logger.log_event("LLM_OUTPUT", {"step": steps, "output": result})
 
-            # 2. Check for Final Answer first
-            final = re.search(r"Final Answer:\s*(.+)", result, re.DOTALL)
-            if final:
-                answer = final.group(1).strip()
-                logger.log_event("AGENT_END", {"steps": steps, "answer": answer})
-                return answer
+            # 1. Explicit "Final Answer:" line
+            final_answer = self._extract_final_answer(result)
+            if final_answer:
+                break
 
-            # 3. Parse Action: tool_name("arg1", "arg2")
-            action_match = re.search(r"Action:\s*(\w+)\((.*?)\)", result, re.DOTALL)
-            if action_match:
-                tool_name = action_match.group(1).strip()
-                raw_args  = action_match.group(2).strip()
-
-                # Execute the tool
-                observation = self._execute_tool(tool_name, raw_args)
-                logger.log_event("TOOL_CALL", {"tool": tool_name, "args": raw_args, "result": observation})
-
-                # Feed the observation back as a user message so the LLM continues
+            # 2. Action -> tool call -> observation
+            action = self._extract_action(result)
+            if action:
+                observation = self._execute_tool(action["tool_name"], action["args"])
+                logger.log_event("TOOL_CALL", {
+                    "tool": action["tool_name"],
+                    "args": action["args"],
+                    "result": observation,
+                })
                 self.history.append({
-                    "role": "user",
+                    "role":    "user",
                     "content": f"Observation: {observation}",
                 })
+            else:
+                # ✅ No Action and no Final Answer: the LLM gave a plain reply.
+                # Treat it as the final answer instead of looping forever.
+                final_answer = result.strip()
+                break
 
             steps += 1
 
-        logger.log_event("AGENT_END", {"steps": steps, "answer": "max steps reached"})
-        return "I reached the maximum number of reasoning steps without a final answer."
+        if final_answer is None:
+            final_answer = "I could not finish within max steps."
 
-    def _execute_tool(self, tool_name: str, raw_args: str) -> str:
-        if tool_name not in self._tool_registry:
+        logger.log_event("AGENT_END", {"steps": steps, "final_answer": final_answer})
+        return final_answer
+
+    def _execute_tool(self, tool_name: str, args: str) -> str:
+        tool = self.tool_map.get(tool_name)
+        if not tool:
             return f"Tool '{tool_name}' not found."
-
-        # Parse comma-separated string args, stripping quotes
-        args = [a.strip().strip('"').strip("'") for a in raw_args.split(",") if a.strip()]
-
+        fn = tool.get("callable")
+        if not callable(fn):
+            return f"Tool '{tool_name}' is not executable."
         try:
-            result = self._tool_registry[tool_name](*args)
-            return str(result)
-        except Exception as e:
-            return f"Error running {tool_name}: {e}"
+            parsed_args = [a.strip().strip('"').strip("'") for a in args.split(",") if a.strip()]
+            return str(fn(*parsed_args))
+        except Exception as exc:
+            logger.log_event("TOOL_ERROR", {"tool": tool_name, "error": str(exc)})
+            return f"Tool '{tool_name}' execution failed: {exc}"

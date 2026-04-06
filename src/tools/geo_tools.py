@@ -2,6 +2,8 @@
 
 from typing import TypedDict
 import math
+import os
+import re
 
 
 class Location(TypedDict):
@@ -9,16 +11,43 @@ class Location(TypedDict):
     lon: float
 
 
+def _load_cities() -> dict:
+    """Load city coordinates from database.md"""
+    db_path = os.path.join(os.path.dirname(__file__), "database.md")
+    city_map = {}
+
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"Database file not found: {db_path}")
+
+    with open(db_path, 'r') as f:
+        content = f.read()
+
+    # Extract Cities section
+    cities_section = re.search(r'## Cities\n(.*?)\n## ', content, re.DOTALL)
+    if not cities_section:
+        raise ValueError("Cities section not found in database.md")
+
+    lines = cities_section.group(1).strip().split('\n')
+    for line in lines:
+        # Skip header and separator lines
+        if line.startswith('|') and not line.startswith('| City') and '-' not in line:
+            parts = [p.strip() for p in line.split('|')[1:-1]]
+            if len(parts) == 3 and parts[1] and parts[2]:  # Ensure parts are not empty
+                city, lat, lon = parts
+                try:
+                    city_map[city.lower()] = {"lat": float(lat), "lon": float(lon)}
+                except ValueError:
+                    # Skip lines that can't be parsed as floats
+                    pass
+
+    return city_map
+
+
 def geocode(city: str) -> Location:
-    city_map = {
-        "hanoi":            {"lat": 21.0285,  "lon": 105.8542},
-        "ho chi minh city": {"lat": 10.8231,  "lon": 106.6297},
-        "new york":         {"lat": 40.7128,  "lon": -74.0060},
-        "london":           {"lat": 51.5074,  "lon": -0.1278},
-    }
+    city_map = _load_cities()
     key = city.lower()
     if key not in city_map:
-        raise ValueError(f"Unknown city: '{city}'. Known cities: {list(city_map)}")
+        raise ValueError(f"Unknown city: '{city}'. Known cities: {list(city_map.keys())}")
     return city_map[key]
 
 
