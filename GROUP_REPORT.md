@@ -1,7 +1,7 @@
 # Báo Cáo Nhóm: Lab 3 - Hệ Thống Agentic Cấp Sản Xuất
 
-- **Tên Nhóm**: Lab Chatbot vs ReAct Agent
-- **Thành Viên Nhóm**: Elly (Git user)
+- **Tên Nhóm**: C401-F3
+- **Thành Viên Nhóm**: Khương Hải Lâm, Lưu Lê Gia Bảo, Đặng Tuấn Anh, Lương Trung Kiên, Thái Doãn Minh Hải, Hoàng Quốc Hùng
 - **Ngày Triển Khai**: 2026-04-06
 
 ---
