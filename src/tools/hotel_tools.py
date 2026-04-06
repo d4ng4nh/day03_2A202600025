@@ -45,6 +45,8 @@ def _load_hotels() -> Dict[str, Dict]:
                     hotel[key] = int(value)
                 elif key == 'rating':
                     hotel[key] = float(value)
+                elif key in ['available_from', 'available_to']:
+                    hotel[key] = value
                 else:
                     hotel[key] = value
         hotels[hotel_id] = hotel
@@ -88,6 +90,13 @@ def search_hotels(city: str, checkin: str, checkout: str,
             total = nights * hotel["price_per_night"]
         except ValueError:
             return json.dumps({"error": "Invalid date format. Use YYYY-MM-DD."})
+
+        # Check availability date range
+        if "available_from" in hotel and "available_to" in hotel:
+            avail_from = datetime.strptime(hotel["available_from"], "%Y-%m-%d")
+            avail_to = datetime.strptime(hotel["available_to"], "%Y-%m-%d")
+            if ci < avail_from or co > avail_to:
+                continue
 
         results.append({
             "hotel_id": hotel["id"],

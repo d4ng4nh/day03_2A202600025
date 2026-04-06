@@ -22,6 +22,8 @@
 - address: 15 Ngo Quyen, Hoan Kiem, Hanoi
 - rating: 4.8
 - available_rooms: 12
+- available_from: 2025-01-01
+- available_to: 2025-12-31
 
 ### HN002
 - name: Hanoi La Siesta Hotel
@@ -32,6 +34,8 @@
 - address: 94 Ma May, Hoan Kiem, Hanoi
 - rating: 4.6
 - available_rooms: 8
+- available_from: 2025-02-01
+- available_to: 2025-11-30
 
 ### HN003
 - name: Hanoi Budget Inn
@@ -42,6 +46,8 @@
 - address: 32 Hang Bong, Hoan Kiem, Hanoi
 - rating: 4.0
 - available_rooms: 20
+- available_from: 2025-03-15
+- available_to: 2025-10-15
 
 ### SGN001
 - name: Park Hyatt Saigon
@@ -52,6 +58,8 @@
 - address: 2 Lam Son Square, District 1, HCMC
 - rating: 4.9
 - available_rooms: 5
+- available_from: 2025-01-15
+- available_to: 2025-12-15
 
 ### SGN002
 - name: Caravelle Saigon
@@ -62,6 +70,8 @@
 - address: 19 Lam Son Square, District 1, HCMC
 - rating: 4.7
 - available_rooms: 15
+- available_from: 2025-01-01
+- available_to: 2025-12-31
 
 ### DAN001
 - name: InterContinental Danang
@@ -72,6 +82,8 @@
 - address: Son Tra Peninsula, Da Nang
 - rating: 4.9
 - available_rooms: 3
+- available_from: 2025-04-01
+- available_to: 2025-09-30
 
 ## Hotel Reviews
 

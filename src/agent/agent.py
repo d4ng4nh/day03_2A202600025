@@ -12,6 +12,7 @@ class ReActAgent:
         self.tools = tools
         self.max_steps = max_steps
         self.history = []
+        self.user_context = ""  # Can be set by caller to include user profile/preferences
         self.tool_map = self._build_tool_map(tools)
 
     def _build_tool_map(self, tools: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -40,9 +41,12 @@ class ReActAgent:
         else:
             tool_descriptions = "- No tools available."
 
+        user_context_section = f"\n{self.user_context}" if self.user_context else ""
+
         return f"""
 You are a travel and hotel assistant. You have access to the following tools:
 {tool_descriptions}
+{user_context_section}
 
 IMPORTANT: You MUST use tools whenever the question involves:
 - Distance or travel between cities → use get_distance

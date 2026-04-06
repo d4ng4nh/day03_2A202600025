@@ -68,6 +68,29 @@ llm           = LLMProvider(openai_client, model="gpt-4o")
 agent         = ReActAgent(llm, tools, max_steps=6)
 
 
+# ── User Profile (Memory System) ─────────────────────────────────────────────
+
+class UserProfile:
+    """Tracks user preferences and details for the current session"""
+    def __init__(self):
+        self.preferences = {}  # hotel preferences
+        self.bookings = []     # list of booking IDs
+        self.visited_hotels = set()  # hotels user has asked about
+
+    def to_context(self) -> str:
+        """Format profile as context string for the agent"""
+        context = "User Profile:\n"
+        if self.preferences:
+            context += f"- Preferences: {self.preferences}\n"
+        if self.bookings:
+            context += f"- Active Bookings: {', '.join(self.bookings)}\n"
+        if self.visited_hotels:
+            context += f"- Hotels Previously Viewed: {', '.join(sorted(self.visited_hotels))}\n"
+        return context if context != "User Profile:\n" else ""
+
+
+user_profile = UserProfile()
+
 # ── Chat loop ─────────────────────────────────────────────────────────────────
 
 print("Chatbot ready. Type 'exit' to quit.")
@@ -87,6 +110,18 @@ while True:
         print("Goodbye!")
         break
 
-    agent.history = []          # reset history each turn
+    # Extract and store details from user input for future reference
+    user_input_lower = user_input.lower()
+    if "budget" in user_input_lower or "price" in user_input_lower:
+        user_profile.preferences["mentioned_budget"] = True
+    if "5 star" in user_input_lower or "five star" in user_input_lower:
+        user_profile.preferences["star_preference"] = 5
+    elif "4 star" in user_input_lower or "four star" in user_input_lower:
+        user_profile.preferences["star_preference"] = 4
+
+    # Pass user context to agent before running (includes memory from conversation)
+    agent.user_context = user_profile.to_context()
+
+    # Keep conversation history across turns (memory enabled)
     reply = agent.run(user_input)
     print(f"Bot: {reply}\n")
