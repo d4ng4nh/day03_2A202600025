@@ -1,4 +1,4 @@
-# Báo Cáo Nhóm: Lab 3 - Hệ Thống Agentic Cấp Sản Xuất
+# Báo Cáo Nhóm: Lab 3 - Hệ Thống Agentic Đặt phòng khách sạn
 
 - **Tên Nhóm**: C401-F3
 - **Thành Viên Nhóm**: Khương Hải Lâm, Lưu Lê Gia Bảo, Đặng Tuấn Anh, Lương Trung Kiên, Thái Doãn Minh Hải, Hoàng Quốc Hùng
